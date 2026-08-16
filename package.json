@@ -1,0 +1,16 @@
+{
+  "name": "a11ytrail",
+  "version": "0.0.0",
+  "description": "The evidence layer under an accessibility claim: what was checked, by whom, when, and what that lets you say.",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src", "README.md", "LICENSE"],
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "demo": "node example/demo.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["accessibility", "wcag", "eaa", "en-301-549", "conformance", "a11y"]
+}
