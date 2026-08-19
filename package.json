@@ -3,6 +3,19 @@
   "version": "0.0.0",
   "description": "The evidence layer under an accessibility claim: what was checked, by whom, when, and what that lets you say.",
   "license": "MIT",
+  "author": {
+    "name": "Shipmind Labs",
+    "email": "hello@shipmindlabs.com",
+    "url": "https://shipmindlabs.com"
+  },
+  "homepage": "https://github.com/shipmindlabs/a11ytrail#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shipmindlabs/a11ytrail.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shipmindlabs/a11ytrail/issues"
+  },
   "type": "module",
   "engines": { "node": ">=22.18" },
   "exports": { ".": "./src/index.ts" },
