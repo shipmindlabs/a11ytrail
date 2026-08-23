@@ -27,6 +27,20 @@ export type Outcome =
   /** Looked at, could not decide. Never counts as a pass. */
   | "inconclusive";
 
+const METHODS: ReadonlySet<string> = new Set<Method>([
+  "automated",
+  "manual",
+  "assistive-technology",
+  "user-testing",
+]);
+
+const OUTCOMES: ReadonlySet<string> = new Set<Outcome>([
+  "passed",
+  "failed",
+  "not-applicable",
+  "inconclusive",
+]);
+
 export type Check = {
   /** Success criterion id, e.g. "1.4.3". */
   readonly criterion: string;
@@ -50,6 +64,16 @@ function validate(check: Check): void {
       `unknown success criterion "${check.criterion}": evidence for a criterion that does not exist cannot support a claim`,
     );
   }
+  if (!METHODS.has(check.method)) {
+    throw new InvalidCheck(
+      `check for ${check.criterion} was recorded with an unknown method "${check.method}": a result nobody can place is not evidence`,
+    );
+  }
+  if (!OUTCOMES.has(check.outcome)) {
+    throw new InvalidCheck(
+      `check for ${check.criterion} was recorded with an unknown outcome "${check.outcome}"`,
+    );
+  }
   if (Number.isNaN(Date.parse(check.checkedAt))) {
     throw new InvalidCheck(`check for ${check.criterion} has an unreadable date: "${check.checkedAt}"`);
   }
@@ -66,7 +90,14 @@ function validate(check: Check): void {
   }
 }
 
-/** A collection of checks, kept in the order they were recorded. */
+/**
+ * A collection of checks, kept in the order they were recorded.
+ *
+ * Append-only: a recorded check is copied and frozen, and the list handed out
+ * is a copy of the internal one. Correcting a check means recording a later
+ * one, which is also what re-testing after a fix looks like — the earlier
+ * result stays in the trail, because an audit asks what you knew and when.
+ */
 export class Evidence {
   #checks: Check[] = [];
 
@@ -75,12 +106,12 @@ export class Evidence {
   }
 
   get checks(): readonly Check[] {
-    return this.#checks;
+    return Object.freeze([...this.#checks]);
   }
 
   add(check: Check): this {
     validate(check);
-    this.#checks.push(check);
+    this.#checks.push(Object.freeze({ ...check }));
     return this;
   }
 
