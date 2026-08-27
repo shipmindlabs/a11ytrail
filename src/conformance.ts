@@ -14,10 +14,10 @@ import type { Check, Evidence } from "./evidence.ts";
 export type CriterionStatus =
   | "satisfied"
   | "failed"
-  /** Passes somewhere, fails or is unevaluated somewhere else. */
+  /** Fails somewhere, holds or is unchecked elsewhere: a failure with a limit. */
   | "partial"
   | "not-applicable"
-  /** Nobody has looked. This is why a claim cannot be made. */
+  /** Nobody has looked, or nobody has looked everywhere. */
   | "not-evaluated"
   /** Looked at, undecided. */
   | "inconclusive";
@@ -25,6 +25,12 @@ export type CriterionStatus =
 export type CriterionResult = {
   readonly criterion: Criterion;
   readonly status: CriterionStatus;
+  /**
+   * The checks the status rests on: the most recent one per covered scope. A
+   * claim that cannot show the evidence under it is the kind that collapses
+   * when someone asks to see it.
+   */
+  readonly checks: readonly Check[];
   /** Scopes with no check for this criterion at all. */
   readonly unevaluatedScopes: readonly string[];
   /** Checks older than the staleness window. */
@@ -92,6 +98,12 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
   const stale = results.filter((r) => r.staleChecks.length > 0);
   const unconfirmed = results.filter((r) => r.automatedOnly && r.status === "satisfied");
   const overclaimed = results.filter((r) => r.beyondAutomation && r.status === "satisfied");
+  // A criterion that fails on the checkout page and was never looked at on the
+  // account page is decided, but only for what was looked at. Without this the
+  // gap would disappear behind the failure it shares a criterion with.
+  const partlyCovered = results.filter(
+    (r) => r.unevaluatedScopes.length > 0 && r.status !== "not-evaluated",
+  );
 
   const reasons: string[] = [];
   let status: ClaimStatus;
@@ -114,6 +126,11 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     reasons.push(`${failed.length} criteria are not satisfied across the covered scopes`);
   }
 
+  if (partlyCovered.length > 0) {
+    reasons.push(
+      `${partlyCovered.length} criteria are decided on part of the covered scopes only, and the rest is unknown rather than passing`,
+    );
+  }
   if (stale.length > 0) {
     reasons.push(
       `${stale.length} criteria rest on evidence older than ${staleAfterDays} days`,
@@ -156,7 +173,9 @@ function assessCriterion(
   // criterion that fails on the checkout page is not satisfied because it holds
   // on the home page. But a gap in coverage is not a failure — it is a gap, and
   // reporting it as a failure would send someone to fix code that may be fine
-  // while the actual answer is "nobody has looked at that page".
+  // while the actual answer is "nobody has looked at that page". A gap is not a
+  // pass either: passing on the pages that were checked says nothing about the
+  // ones that were not, so the criterion stays unevaluated until they are.
   let status: CriterionStatus;
   if (latest.length === 0) {
     status = "not-evaluated";
@@ -178,6 +197,7 @@ function assessCriterion(
   return {
     criterion,
     status,
+    checks: latest,
     unevaluatedScopes,
     staleChecks,
     automatedOnly,
