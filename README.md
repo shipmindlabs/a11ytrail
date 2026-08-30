@@ -25,6 +25,13 @@ Trying to publish the statement anyway:
   is under way.
 
 After closing the gap: partially-conformant
+
+5 parts still need a human decision:
+  - Describe what a person runs into for 1.4.3 Contrast (Minimum).
+  - Name the accessible alternative for 1.4.3 Contrast (Minimum), or say there is none.
+  - State which content, if any, is exempt as a disproportionate burden.
+  - State which content, if any, falls outside the scope of the legislation.
+  - Give the date this statement was last reviewed.
 ```
 
 ## Use
@@ -44,10 +51,14 @@ const evidence = new Evidence()
   });
 
 const claim = assess(evidence, { level: "AA" });
-console.log(toMarkdown(statement(claim, organisation, new Date())));
+const published = statement(claim, organisation, new Date());
+if (published.pending.length > 0) {
+  // The parts no record of tests can answer, listed rather than guessed.
+}
+console.log(toMarkdown(published));
 ```
 
-## The four things it refuses to do
+## The five things it refuses to do
 
 **It will not treat an unevaluated criterion as a pass.** WCAG's conformance
 requirement gives no partial credit: a claim at a level means every criterion at
@@ -70,6 +81,12 @@ weak evidence, it is absent evidence wearing a green tick.
 audited before four redesigns supports nothing, so stale evidence appears in the
 claim's caveats and in the published statement.
 
+**It will not write the parts that are a judgement.** Whether an exemption is a
+disproportionate burden, what alternative a user is offered, what a failing
+criterion means for the person in front of it — none of that follows from a
+record of tests. Those parts come back as `pending` and are marked in the
+Markdown, because a plausible sentence there reads as answered.
+
 ## What it does not do
 
 **It runs no tests.** axe-core, Playwright and a person with a screen reader do
@@ -89,7 +106,7 @@ Early. What is here works end to end; the rest is listed rather than implied.
 | Criteria | WCAG 2.2, levels A and AA — 55 success criteria |
 | Evidence | outcome, method, date, who, scope, tool; later checks supersede earlier ones per scope |
 | Claim | per-criterion status, coverage gaps, staleness, scanner-only passes |
-| Statement | European model statement as data and as Markdown |
+| Statement | European model statement as data and as Markdown, with the human decisions marked instead of filled |
 | Not yet | EN 301 549 clause mapping beyond WCAG, VPAT/ACR export, importing axe-core results directly, non-web software criteria |
 
 Level AAA is deliberately absent: nobody claims it for a whole product, and

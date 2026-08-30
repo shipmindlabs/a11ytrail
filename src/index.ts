@@ -37,6 +37,9 @@ export {
   toMarkdown,
   UnsupportedClaim,
   type ComplianceStatus,
+  type NonAccessibleItem,
   type Organisation,
+  type Pending,
+  type Section,
   type Statement,
 } from "./statement.ts";

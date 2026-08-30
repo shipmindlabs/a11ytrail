@@ -1,6 +1,6 @@
 /**
  * A team audits two pages, publishes a statement, and finds out what their
- * evidence actually supports.
+ * evidence actually supports — and what it cannot decide for them.
  *
  *   npm run demo
  */
@@ -75,7 +75,12 @@ record({ criterion: "2.4.7", scope: "checkout", checkedAt: "2026-08-14" });
 
 const finished = assess(evidence, { asOf });
 console.log(`\nAfter closing the gap: ${finished.status}`);
-console.log("\n" + toMarkdown(statement(finished, organisation(), asOf)));
+
+const published = statement(finished, organisation(), asOf);
+console.log(`\n${published.pending.length} parts still need a human decision:`);
+for (const decision of published.pending) console.log(`  - ${decision.question}`);
+
+console.log("\n" + toMarkdown(published));
 
 function organisation() {
   return {
