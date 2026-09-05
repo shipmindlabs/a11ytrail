@@ -3,8 +3,8 @@
  *
  * A conformance claim is only as good as the evidence behind it, and the part
  * that rots is the "when": a page audited eighteen months and four redesigns
- * ago supports nothing. Every check carries its date so that staleness is
- * visible rather than assumed away.
+ * ago supports nothing. Every check carries its date, and the build it was
+ * taken on, so that staleness is visible rather than assumed away.
  */
 
 import { criterion } from "./criteria.ts";
@@ -52,6 +52,11 @@ export type Check = {
   readonly checkedBy: string;
   /** What was checked: a page, a view, a component. */
   readonly scope: string;
+  /**
+   * The build the check applies to — a version, a tag, a commit. A result that
+   * does not name one cannot be tied to what ships today.
+   */
+  readonly build?: string;
   readonly tool?: string;
   readonly note?: string;
 };
@@ -82,6 +87,11 @@ function validate(check: Check): void {
   }
   if (!check.scope.trim()) {
     throw new InvalidCheck(`check for ${check.criterion} does not say what was checked`);
+  }
+  if (check.build !== undefined && !check.build.trim()) {
+    throw new InvalidCheck(
+      `check for ${check.criterion} carries an empty build: leave it out rather than recording a build nobody can identify`,
+    );
   }
   if (check.method === "automated" && !check.tool?.trim()) {
     throw new InvalidCheck(
@@ -123,6 +133,13 @@ export class Evidence {
   /** The scopes that appear anywhere in the evidence. */
   get scopes(): readonly string[] {
     return [...new Set(this.#checks.map((check) => check.scope))].sort();
+  }
+
+  /** The builds the evidence was taken on, oldest recording order aside. */
+  get builds(): readonly string[] {
+    return [
+      ...new Set(this.#checks.flatMap((check) => (check.build ? [check.build] : []))),
+    ].sort();
   }
 
   /**

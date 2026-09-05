@@ -22,6 +22,29 @@ export type CriterionStatus =
   /** Looked at, undecided. */
   | "inconclusive";
 
+/** Why a check no longer says anything about the build being assessed. */
+export type StaleReason =
+  /** Older than the staleness window. */
+  | "aged-out"
+  /** Recorded against a build that is not the one being assessed. */
+  | "other-build"
+  /** Records no build, so it cannot be tied to the one being assessed. */
+  | "build-unknown";
+
+export type StaleCheck = {
+  readonly check: Check;
+  readonly reason: StaleReason;
+};
+
+/** One check to re-run, named by what it covers. */
+export type Recheck = {
+  readonly criterion: Criterion;
+  readonly scope: string;
+  readonly reason: StaleReason;
+  readonly lastCheckedAt: string;
+  readonly lastBuild?: string;
+};
+
 export type CriterionResult = {
   readonly criterion: Criterion;
   readonly status: CriterionStatus;
@@ -33,8 +56,8 @@ export type CriterionResult = {
   readonly checks: readonly Check[];
   /** Scopes with no check for this criterion at all. */
   readonly unevaluatedScopes: readonly string[];
-  /** Checks older than the staleness window. */
-  readonly staleChecks: readonly Check[];
+  /** Checks that aged out or belong to another build, with which of the two. */
+  readonly staleChecks: readonly StaleCheck[];
   /**
    * True when every check behind this status came from a scanner. Automated
    * tools settle roughly a quarter to a third of accessibility problems, so
@@ -59,10 +82,14 @@ export type ClaimStatus =
 export type Claim = {
   readonly level: Level;
   readonly status: ClaimStatus;
+  /** The build the claim is about, when one was named. */
+  readonly build?: string;
   readonly results: readonly CriterionResult[];
   readonly failed: readonly CriterionResult[];
   readonly unevaluated: readonly CriterionResult[];
   readonly stale: readonly CriterionResult[];
+  /** Every criterion and scope whose evidence no longer applies: the work list. */
+  readonly recheck: readonly Recheck[];
   /** Satisfied only by scanners, with nobody having confirmed. */
   readonly unconfirmed: readonly CriterionResult[];
   /** Satisfied by a scanner for a criterion no scanner can settle. */
@@ -77,6 +104,12 @@ export type AssessOptions = {
   readonly scopes?: readonly string[];
   /** Evidence older than this many days is stale. Defaults to 365. */
   readonly staleAfterDays?: number;
+  /**
+   * The build the claim is about — a version, a tag, a commit. Given one, a
+   * check recorded against another build, or against none, needs re-running:
+   * a pass on the release before last says nothing about what ships today.
+   */
+  readonly build?: string;
   /** The date the assessment is made. Injectable so reports are reproducible. */
   readonly asOf?: Date;
 };
@@ -86,9 +119,10 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
   const asOf = options.asOf ?? new Date();
   const staleAfterDays = options.staleAfterDays ?? 365;
   const scopes = options.scopes ?? evidence.scopes;
+  const build = options.build;
 
   const results = criteriaFor(level).map((criterion) =>
-    assessCriterion(criterion, evidence, scopes, asOf, staleAfterDays),
+    assessCriterion(criterion, evidence, scopes, asOf, staleAfterDays, build),
   );
 
   const failed = results.filter((r) => r.status === "failed" || r.status === "partial");
@@ -96,6 +130,15 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     (r) => r.status === "not-evaluated" || r.status === "inconclusive",
   );
   const stale = results.filter((r) => r.staleChecks.length > 0);
+  const recheck = results.flatMap((result) =>
+    result.staleChecks.map((entry) => ({
+      criterion: result.criterion,
+      scope: entry.check.scope,
+      reason: entry.reason,
+      lastCheckedAt: entry.check.checkedAt,
+      lastBuild: entry.check.build,
+    })),
+  );
   const unconfirmed = results.filter((r) => r.automatedOnly && r.status === "satisfied");
   const overclaimed = results.filter((r) => r.beyondAutomation && r.status === "satisfied");
   // A criterion that fails on the checkout page and was never looked at on the
@@ -131,11 +174,26 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
       `${partlyCovered.length} criteria are decided on part of the covered scopes only, and the rest is unknown rather than passing`,
     );
   }
-  if (stale.length > 0) {
+
+  const agedOut = countStale(results, "aged-out");
+  if (agedOut > 0) {
+    reasons.push(`${agedOut} criteria rest on evidence older than ${staleAfterDays} days`);
+  }
+
+  const otherBuild = countStale(results, "other-build");
+  if (build !== undefined && otherBuild > 0) {
     reasons.push(
-      `${stale.length} criteria rest on evidence older than ${staleAfterDays} days`,
+      `${otherBuild} criteria rest on evidence from a build other than ${build}, and need re-checking`,
     );
   }
+
+  const buildUnknown = countStale(results, "build-unknown");
+  if (build !== undefined && buildUnknown > 0) {
+    reasons.push(
+      `${buildUnknown} criteria rest on evidence that does not say which build it was taken on`,
+    );
+  }
+
   if (unconfirmed.length > 0) {
     reasons.push(
       `${unconfirmed.length} criteria are satisfied by automated checks alone, which settle only part of WCAG`,
@@ -148,7 +206,23 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     );
   }
 
-  return { level, status, results, failed, unevaluated, stale, unconfirmed, overclaimed, reasons };
+  return {
+    level,
+    status,
+    build,
+    results,
+    failed,
+    unevaluated,
+    stale,
+    recheck,
+    unconfirmed,
+    overclaimed,
+    reasons,
+  };
+}
+
+function countStale(results: readonly CriterionResult[], reason: StaleReason): number {
+  return results.filter((r) => r.staleChecks.some((entry) => entry.reason === reason)).length;
 }
 
 function assessCriterion(
@@ -157,13 +231,18 @@ function assessCriterion(
   scopes: readonly string[],
   asOf: Date,
   staleAfterDays: number,
+  build: string | undefined,
 ): CriterionResult {
   const latest = evidence.latestPerScope(criterion.id).filter((c) => scopes.includes(c.scope));
   const covered = new Set(latest.map((check) => check.scope));
   const unevaluatedScopes = scopes.filter((scope) => !covered.has(scope));
 
   const staleBefore = asOf.getTime() - staleAfterDays * 24 * 60 * 60 * 1000;
-  const staleChecks = latest.filter((check) => Date.parse(check.checkedAt) < staleBefore);
+  const staleChecks: StaleCheck[] = [];
+  for (const check of latest) {
+    const reason = staleness(check, staleBefore, build);
+    if (reason) staleChecks.push({ check, reason });
+  }
 
   const outcomes = new Set(latest.map((check) => check.outcome));
   const automatedOnly =
@@ -203,4 +282,25 @@ function assessCriterion(
     automatedOnly,
     beyondAutomation: automatedOnly && !AUTOMATABLE.has(criterion.id),
   };
+}
+
+/**
+ * Stale evidence is not voided evidence: it still says what somebody found,
+ * and the claim keeps standing on it while saying so. What changes is that the
+ * check lands on the list of things to re-run.
+ *
+ * The build is looked at before the date because when both apply, re-running
+ * the check against the current build answers the age question too.
+ */
+function staleness(
+  check: Check,
+  staleBefore: number,
+  build: string | undefined,
+): StaleReason | undefined {
+  if (build !== undefined) {
+    if (check.build === undefined) return "build-unknown";
+    if (check.build !== build) return "other-build";
+  }
+  if (Date.parse(check.checkedAt) < staleBefore) return "aged-out";
+  return undefined;
 }

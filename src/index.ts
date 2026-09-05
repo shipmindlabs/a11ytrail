@@ -30,6 +30,9 @@ export {
   type ClaimStatus,
   type CriterionResult,
   type CriterionStatus,
+  type Recheck,
+  type StaleCheck,
+  type StaleReason,
 } from "./conformance.ts";
 
 export {

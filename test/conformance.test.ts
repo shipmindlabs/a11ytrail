@@ -19,10 +19,10 @@ function check(overrides: Partial<Check> & Pick<Check, "criterion">): Check {
 }
 
 /** Evidence that passes every criterion at level AA, on one scope. */
-function fullPass(scope = "home", checkedAt = "2026-08-01"): Evidence {
+function fullPass(scope = "home", checkedAt = "2026-08-01", build?: string): Evidence {
   const evidence = new Evidence();
   for (const criterion of criteriaFor("AA")) {
-    evidence.add(check({ criterion: criterion.id, scope, checkedAt }));
+    evidence.add(check({ criterion: criterion.id, scope, checkedAt, ...(build ? { build } : {}) }));
   }
   return evidence;
 }
@@ -140,6 +140,70 @@ test("evidence that has aged out is reported without silently voiding the claim"
   assert.match(claim.reasons.join(" "), /older than 365 days/);
 });
 
+// A check from two releases ago is not evidence about today's build.
+test("evidence from another build is flagged rather than taken as current", () => {
+  const claim = assess(fullPass("home", "2026-08-01", "2026.8.1"), { asOf, build: "2026.9.0" });
+
+  assert.equal(claim.build, "2026.9.0");
+  assert.equal(claim.status, "conformant");
+  assert.equal(claim.stale.length, claim.results.length);
+  assert.match(claim.reasons.join(" "), /build other than 2026\.9\.0/);
+});
+
+test("re-checking against the build being assessed clears the flag", () => {
+  const claim = assess(fullPass("home", "2026-08-01", "2026.9.0"), { asOf, build: "2026.9.0" });
+
+  assert.deepEqual(claim.stale, []);
+  assert.deepEqual(claim.recheck, []);
+  assert.ok(!claim.reasons.some((reason) => /build/.test(reason)));
+});
+
+test("a check that does not say which build it applies to cannot be tied to one", () => {
+  const claim = assess(fullPass(), { asOf, build: "2026.9.0" });
+
+  assert.ok(claim.recheck.every((item) => item.reason === "build-unknown"));
+  assert.match(claim.reasons.join(" "), /does not say which build/);
+});
+
+test("the claim names what to re-run, by criterion and scope", () => {
+  const evidence = fullPass("home", "2026-08-01", "2026.8.1");
+  for (const criterion of criteriaFor("AA")) {
+    evidence.add(check({ criterion: criterion.id, scope: "checkout", build: "2026.9.0" }));
+  }
+
+  const claim = assess(evidence, { asOf, build: "2026.9.0" });
+
+  assert.deepEqual([...new Set(claim.recheck.map((item) => item.scope))], ["home"]);
+  const contrast = claim.recheck.find((item) => item.criterion.id === "1.4.3")!;
+  assert.equal(contrast.reason, "other-build");
+  assert.equal(contrast.lastBuild, "2026.8.1");
+  assert.equal(contrast.lastCheckedAt, "2026-08-01");
+});
+
+// Re-running the check against the current build answers the age question too.
+test("a build mismatch is reported instead of age when both apply", () => {
+  const claim = assess(fullPass("home", "2020-01-01", "2020.1.0"), { asOf, build: "2026.9.0" });
+
+  assert.ok(claim.recheck.every((item) => item.reason === "other-build"));
+  assert.ok(!claim.reasons.some((reason) => /older than/.test(reason)));
+});
+
+test("without a build to assess against, only age makes evidence stale", () => {
+  const claim = assess(fullPass("home", "2020-01-01", "2020.1.0"), { asOf });
+
+  assert.equal(claim.build, undefined);
+  assert.ok(claim.recheck.every((item) => item.reason === "aged-out"));
+  assert.match(claim.reasons.join(" "), /older than 365 days/);
+});
+
+test("an empty build is refused rather than recorded", () => {
+  assert.throws(
+    () => new Evidence().add(check({ criterion: "1.4.3", build: "  " })),
+    InvalidCheck,
+  );
+  assert.deepEqual(fullPass("home", "2026-08-01", "2026.8.1").builds, ["2026.8.1"]);
+});
+
 // A scanner passing "images have alt text" says nothing about whether the alt
 // text means anything.
 test("a scanner-only pass on a criterion no scanner can settle is called out", () => {
@@ -190,7 +254,7 @@ test("evidence refuses what cannot support a claim", () => {
 });
 
 test("evidence survives a round trip through JSON", () => {
-  const evidence = fullPass();
+  const evidence = fullPass("home", "2026-08-01", "2026.8.1");
   const restored = Evidence.fromJSON(JSON.parse(JSON.stringify(evidence)));
   assert.deepEqual(restored.checks, evidence.checks);
 });
