@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { criteriaFor } from "../src/criteria.ts";
-import { assess } from "../src/conformance.ts";
+import { assess, InvalidAssessment } from "../src/conformance.ts";
 import { Evidence, InvalidCheck, type Check } from "../src/evidence.ts";
 
 const asOf = new Date("2026-08-16T00:00:00Z");
@@ -194,6 +194,35 @@ test("without a build to assess against, only age makes evidence stale", () => {
   assert.equal(claim.build, undefined);
   assert.ok(claim.recheck.every((item) => item.reason === "aged-out"));
   assert.match(claim.reasons.join(" "), /older than 365 days/);
+});
+
+// Nothing else catches this: with no build named, a check from the release
+// before last is as current as one from this morning.
+test("a claim resting on several builds and naming none is called out", () => {
+  const evidence = fullPass("home", "2026-08-01", "2026.8.1");
+  for (const criterion of criteriaFor("AA")) {
+    evidence.add(check({ criterion: criterion.id, scope: "checkout", build: "2026.9.0" }));
+  }
+
+  const claim = assess(evidence, { asOf });
+
+  assert.equal(claim.status, "conformant");
+  assert.deepEqual(claim.builds, ["2026.8.1", "2026.9.0"]);
+  assert.match(claim.reasons.join(" "), /spans 2 builds \(2026\.8\.1, 2026\.9\.0\)/);
+});
+
+test("evidence taken on one build needs no such warning", () => {
+  const claim = assess(fullPass("home", "2026-08-01", "2026.9.0"), { asOf });
+
+  assert.deepEqual(claim.builds, ["2026.9.0"]);
+  assert.ok(!claim.reasons.some((reason) => /spans/.test(reason)));
+});
+
+test("an assessment nobody could reproduce is refused rather than run", () => {
+  assert.throws(() => assess(fullPass(), { asOf, build: "  " }), InvalidAssessment);
+  assert.throws(() => assess(fullPass(), { asOf, staleAfterDays: 0 }), InvalidAssessment);
+  assert.throws(() => assess(fullPass(), { asOf, staleAfterDays: -30 }), InvalidAssessment);
+  assert.throws(() => assess(fullPass(), { asOf: new Date("whenever") }), InvalidAssessment);
 });
 
 test("an empty build is refused rather than recorded", () => {

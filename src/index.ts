@@ -25,6 +25,7 @@ export {
 
 export {
   assess,
+  InvalidAssessment,
   type AssessOptions,
   type Claim,
   type ClaimStatus,

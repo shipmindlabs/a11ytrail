@@ -84,6 +84,8 @@ export type Claim = {
   readonly status: ClaimStatus;
   /** The build the claim is about, when one was named. */
   readonly build?: string;
+  /** The builds the evidence under this claim was actually taken on. */
+  readonly builds: readonly string[];
   readonly results: readonly CriterionResult[];
   readonly failed: readonly CriterionResult[];
   readonly unevaluated: readonly CriterionResult[];
@@ -114,12 +116,17 @@ export type AssessOptions = {
   readonly asOf?: Date;
 };
 
+/** The assessment itself cannot be run as asked. */
+export class InvalidAssessment extends Error {}
+
 export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
   const level = options.level ?? "AA";
   const asOf = options.asOf ?? new Date();
   const staleAfterDays = options.staleAfterDays ?? 365;
   const scopes = options.scopes ?? evidence.scopes;
   const build = options.build;
+
+  validateOptions(build, staleAfterDays, asOf);
 
   const results = criteriaFor(level).map((criterion) =>
     assessCriterion(criterion, evidence, scopes, asOf, staleAfterDays, build),
@@ -141,6 +148,13 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
   );
   const unconfirmed = results.filter((r) => r.automatedOnly && r.status === "satisfied");
   const overclaimed = results.filter((r) => r.beyondAutomation && r.status === "satisfied");
+  const builds = [
+    ...new Set(
+      results.flatMap((result) =>
+        result.checks.flatMap((check) => (check.build ? [check.build] : [])),
+      ),
+    ),
+  ].sort();
   // A criterion that fails on the checkout page and was never looked at on the
   // account page is decided, but only for what was looked at. Without this the
   // gap would disappear behind the failure it shares a criterion with.
@@ -194,6 +208,15 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     );
   }
 
+  // Nothing above catches this: with no build to assess against, a check from
+  // two releases ago is as current as one from this morning, and the claim ends
+  // up describing a state of the product that never shipped.
+  if (build === undefined && builds.length > 1) {
+    reasons.push(
+      `the evidence spans ${builds.length} builds (${builds.join(", ")}) and the claim names none, so it does not describe one state of the product`,
+    );
+  }
+
   if (unconfirmed.length > 0) {
     reasons.push(
       `${unconfirmed.length} criteria are satisfied by automated checks alone, which settle only part of WCAG`,
@@ -210,6 +233,7 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     level,
     status,
     build,
+    builds,
     results,
     failed,
     unevaluated,
@@ -219,6 +243,24 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     overclaimed,
     reasons,
   };
+}
+
+function validateOptions(build: string | undefined, staleAfterDays: number, asOf: Date): void {
+  if (build !== undefined && !build.trim()) {
+    throw new InvalidAssessment(
+      "the build to assess against is empty: leave it out to fall back on dates alone, rather than measuring evidence against a build nobody can identify",
+    );
+  }
+  if (!Number.isFinite(staleAfterDays) || staleAfterDays <= 0) {
+    throw new InvalidAssessment(
+      `staleAfterDays must be a positive number of days, not ${staleAfterDays}: a window that closes at once makes every check stale and none of them informative`,
+    );
+  }
+  if (Number.isNaN(asOf.getTime())) {
+    throw new InvalidAssessment(
+      "the date of the assessment is unreadable, so nothing can be called stale or current",
+    );
+  }
 }
 
 function countStale(results: readonly CriterionResult[], reason: StaleReason): number {
