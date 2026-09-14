@@ -83,6 +83,36 @@ test("a later check on one scope does not speak for another", () => {
   assert.deepEqual(evidence.scopes, ["checkout", "home"]);
 });
 
+// A result from another build answers a different question, however recent it is.
+test("asked about a build, a check on that build beats a later one from another", () => {
+  const evidence = new Evidence()
+    .add(check({ build: "2026.9.0", checkedAt: "2026-08-01" }))
+    .add(check({ build: "2026.8.1", checkedAt: "2026-08-10", outcome: "failed" }));
+
+  assert.deepEqual(
+    evidence.latestPerScope("1.4.3", "2026.9.0").map((c) => [c.outcome, c.build]),
+    [["passed", "2026.9.0"]],
+  );
+  assert.deepEqual(
+    evidence.latestPerScope("1.4.3").map((c) => [c.outcome, c.build]),
+    [["failed", "2026.8.1"]],
+  );
+});
+
+test("a scope with nothing on the build asked about falls back to its last check", () => {
+  const evidence = new Evidence()
+    .add(check({ scope: "home", build: "2026.9.0" }))
+    .add(check({ scope: "checkout", build: "2026.8.1" }));
+
+  assert.deepEqual(
+    evidence.latestPerScope("1.4.3", "2026.9.0").map((c) => [c.scope, c.build]),
+    [
+      ["checkout", "2026.8.1"],
+      ["home", "2026.9.0"],
+    ],
+  );
+});
+
 test("evidence for a criterion that does not exist is refused", () => {
   assert.throws(() => new Evidence().add(check({ criterion: "9.9.9" })), InvalidCheck);
 });

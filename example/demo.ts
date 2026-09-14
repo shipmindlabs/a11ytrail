@@ -17,6 +17,7 @@ import {
 import type { Check } from "../src/index.ts";
 
 const asOf = new Date("2026-08-16T00:00:00Z");
+const audited = "2026.8.1";
 
 const evidence = new Evidence();
 const record = (overrides: Partial<Check> & Pick<Check, "criterion" | "scope">) =>
@@ -25,6 +26,7 @@ const record = (overrides: Partial<Check> & Pick<Check, "criterion" | "scope">) 
     method: "manual",
     checkedAt: "2026-08-01",
     checkedBy: "audit team",
+    build: audited,
     ...overrides,
   });
 
@@ -79,6 +81,19 @@ console.log(`\nAfter closing the gap: ${finished.status}`);
 const published = statement(finished, organisation(), asOf);
 console.log(`\n${published.pending.length} parts still need a human decision:`);
 for (const decision of published.pending) console.log(`  - ${decision.question}`);
+
+// Then the next release ships. Nothing about the evidence changed, and that is
+// the problem: every check describes the build before it.
+const shipped = assess(evidence, { asOf, build: "2026.9.0" });
+console.log(`\nAgainst build 2026.9.0: ${shipped.status}`);
+for (const reason of shipped.reasons) console.log(`  - ${reason}`);
+
+console.log(`\n${shipped.recheck.length} checks to re-run, starting with:`);
+for (const item of shipped.recheck.slice(0, 2)) {
+  console.log(
+    `  - ${item.criterion.id} ${item.criterion.name} on ${item.scope} (last checked ${item.lastCheckedAt} on ${item.lastBuild})`,
+  );
+}
 
 console.log("\n" + toMarkdown(published));
 

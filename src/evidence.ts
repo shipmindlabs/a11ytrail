@@ -135,7 +135,7 @@ export class Evidence {
     return [...new Set(this.#checks.map((check) => check.scope))].sort();
   }
 
-  /** The builds the evidence was taken on, oldest recording order aside. */
+  /** The builds the evidence names, sorted. */
   get builds(): readonly string[] {
     return [
       ...new Set(this.#checks.flatMap((check) => (check.build ? [check.build] : []))),
@@ -146,10 +146,21 @@ export class Evidence {
    * The most recent check per scope for a criterion. A later check supersedes
    * an earlier one for the same scope — that is what re-testing after a fix
    * means — but a pass on one page never speaks for another.
+   *
+   * Given a build, a check recorded against that build outranks any later one
+   * recorded against a different build: the question is what holds for the
+   * build being asked about, and a result from another build answers a
+   * different question. A scope with no check on that build falls back to its
+   * most recent check, which is then stale rather than missing.
    */
-  latestPerScope(criterionId: string): readonly Check[] {
+  latestPerScope(criterionId: string, build?: string): readonly Check[] {
+    const checks = this.for(criterionId);
+    const onBuild = build === undefined ? [] : checks.filter((check) => check.build === build);
+    const covered = new Set(onBuild.map((check) => check.scope));
+    const considered = [...onBuild, ...checks.filter((check) => !covered.has(check.scope))];
+
     const latest = new Map<string, Check>();
-    for (const check of this.for(criterionId)) {
+    for (const check of considered) {
       const held = latest.get(check.scope);
       if (!held || Date.parse(check.checkedAt) >= Date.parse(held.checkedAt)) {
         latest.set(check.scope, check);

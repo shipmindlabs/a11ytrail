@@ -275,7 +275,11 @@ function assessCriterion(
   staleAfterDays: number,
   build: string | undefined,
 ): CriterionResult {
-  const latest = evidence.latestPerScope(criterion.id).filter((c) => scopes.includes(c.scope));
+  // Naming a build changes which check speaks for a scope: the one taken on
+  // that build, even when a later check exists for another.
+  const latest = evidence
+    .latestPerScope(criterion.id, build)
+    .filter((c) => scopes.includes(c.scope));
   const covered = new Set(latest.map((check) => check.scope));
   const unevaluatedScopes = scopes.filter((scope) => !covered.has(scope));
 

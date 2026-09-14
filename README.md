@@ -32,6 +32,14 @@ After closing the gap: partially-conformant
   - State which content, if any, is exempt as a disproportionate burden.
   - State which content, if any, falls outside the scope of the legislation.
   - Give the date this statement was last reviewed.
+
+Against build 2026.9.0: partially-conformant
+  - 1 criteria are not satisfied across the covered scopes
+  - 55 criteria rest on evidence from a build other than 2026.9.0, and need re-checking
+
+110 checks to re-run, starting with:
+  - 1.1.1 Non-text Content on checkout (last checked 2026-08-05 on 2026.8.1)
+  - 1.1.1 Non-text Content on home (last checked 2026-08-05 on 2026.8.1)
 ```
 
 ## Use
@@ -47,10 +55,15 @@ const evidence = new Evidence()
     checkedAt: "2026-08-05",
     checkedBy: "audit team",
     scope: "checkout",
+    build: "2026.8.1",
     note: "price text on the promo banner is 3.1:1",
   });
 
-const claim = assess(evidence, { level: "AA" });
+const claim = assess(evidence, { level: "AA", build: "2026.9.0" });
+if (claim.recheck.length > 0) {
+  // What the release you are about to ship has no evidence for, by criterion and scope.
+}
+
 const published = statement(claim, organisation, new Date());
 if (published.pending.length > 0) {
   // The parts no record of tests can answer, listed rather than guessed.
@@ -77,9 +90,13 @@ alone is flagged; a pass recorded by a tool alone *on a criterion no tool can
 settle* — 1.1.1 Non-text Content, say — is called out separately. That is not
 weak evidence, it is absent evidence wearing a green tick.
 
-**It will not let evidence age silently.** Every check carries its date. A page
-audited before four redesigns supports nothing, so stale evidence appears in the
-claim's caveats and in the published statement.
+**It will not let evidence age silently.** Every check carries its date and the
+build it was taken on. A page audited before four redesigns supports nothing,
+and a pass from two releases ago says nothing about what ships today — so stale
+evidence appears in the claim's caveats and in the published statement, with
+what to re-run named by criterion and scope. Naming the build under assessment
+also decides which check speaks for it: the one taken on that build, not merely
+the most recent one.
 
 **It will not write the parts that are a judgement.** Whether an exemption is a
 disproportionate burden, what alternative a user is offered, what a failing
@@ -104,8 +121,8 @@ Early. What is here works end to end; the rest is listed rather than implied.
 | | |
 |---|---|
 | Criteria | WCAG 2.2, levels A and AA — 55 success criteria |
-| Evidence | outcome, method, date, who, scope, tool; later checks supersede earlier ones per scope |
-| Claim | per-criterion status, coverage gaps, staleness, scanner-only passes |
+| Evidence | outcome, method, date, who, scope, tool, build; later checks supersede earlier ones per scope |
+| Claim | per-criterion status, coverage gaps, staleness by age and by build, the re-check list, scanner-only passes |
 | Statement | European model statement as data and as Markdown, with the human decisions marked instead of filled |
 | Not yet | EN 301 549 clause mapping beyond WCAG, VPAT/ACR export, importing axe-core results directly, non-web software criteria |
 

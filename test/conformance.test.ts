@@ -158,6 +158,47 @@ test("re-checking against the build being assessed clears the flag", () => {
   assert.ok(!claim.reasons.some((reason) => /build/.test(reason)));
 });
 
+// The check that speaks for a build is the one taken on it, not the most recent
+// one overall: a result from a branch build answers a different question.
+test("a check on the build being assessed outranks a later one from another build", () => {
+  const evidence = fullPass("home", "2026-08-01", "2026.9.0");
+  evidence.add(
+    check({
+      criterion: "1.4.3",
+      outcome: "failed",
+      checkedAt: "2026-08-10",
+      build: "2026.8.1",
+    }),
+  );
+
+  const claim = assess(evidence, { asOf, build: "2026.9.0" });
+  assert.equal(claim.status, "conformant");
+  assert.deepEqual(claim.stale, []);
+
+  // With no build named, the later check is simply the current one.
+  assert.equal(assess(evidence, { asOf }).status, "partially-conformant");
+});
+
+test("a scope with no check on the assessed build falls back, and says so", () => {
+  const evidence = fullPass("home", "2026-08-01", "2026.9.0");
+  for (const criterion of criteriaFor("AA")) {
+    evidence.add(
+      check({
+        criterion: criterion.id,
+        scope: "checkout",
+        checkedAt: "2026-07-01",
+        build: "2026.8.1",
+      }),
+    );
+  }
+
+  const claim = assess(evidence, { asOf, build: "2026.9.0" });
+
+  assert.equal(claim.status, "conformant");
+  assert.deepEqual([...new Set(claim.recheck.map((item) => item.scope))], ["checkout"]);
+  assert.ok(claim.recheck.every((item) => item.reason === "other-build"));
+});
+
 test("a check that does not say which build it applies to cannot be tied to one", () => {
   const claim = assess(fullPass(), { asOf, build: "2026.9.0" });
 
