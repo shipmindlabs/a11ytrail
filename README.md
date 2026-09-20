@@ -42,6 +42,51 @@ Against build 2026.9.0: partially-conformant
   - 1.1.1 Non-text Content on home (last checked 2026-08-05 on 2026.8.1)
 ```
 
+## Evidence, not a scanner badge
+
+A scanner decides what can be decided from the markup: the contrast ratio of a
+text node against its background, a missing `lang`, a control with no accessible
+name, an input with no label. That work is worth doing. It is cheap, it repeats
+on every commit, and it finds real defects before anyone has to look.
+
+What it cannot do is read meaning. Whether `alt="chart"` describes the chart,
+whether tabbing through checkout follows the order a person reads it in, whether
+"Error in field 3" tells anyone what to correct — a machine sees an attribute
+that is present, an order that is defined, a message that is rendered, and calls
+each of them satisfied. That is why the published estimates for automated
+detection sit at roughly a quarter to a third of accessibility problems, and why
+the criteria left over are not marginal ones: 1.1.1 Non-text Content, 2.4.3
+Focus Order, 3.3.3 Error Suggestion.
+
+So a tool having run is treated here as a fact about the check, not as an answer
+to the criterion. Seven of the fifty-five criteria at A and AA are listed in
+`AUTOMATABLE` as ones a scanner can settle on its own. A pass on anything else
+with nothing but a scanner behind it is absent evidence wearing a green tick,
+and it is reported as such.
+
+### What it keeps instead
+
+Every check carries what a badge throws away: the outcome, the method
+(`automated`, `manual`, `assistive-technology`, `user-testing`), who ran it, the
+date, the scope it covers, the build it was taken on, and the tool if one was
+involved. An automated result without a named tool is refused, because nobody
+can reproduce it.
+
+From that, a claim can say what a percentage cannot:
+
+```ts
+const claim = assess(evidence, { level: "AA", build: "2026.9.0" });
+
+claim.unconfirmed; // satisfied, but every check behind it came from a scanner
+claim.overclaimed; // satisfied by a scanner alone on a criterion no scanner settles
+claim.unevaluated; // nobody has looked, or nobody has looked everywhere
+claim.recheck;     // evidence that describes another build, by criterion and scope
+```
+
+None of these turn a pass into a failure. They change what the claim is allowed
+to say about it, which is the whole distinction between a record of testing and
+a badge.
+
 ## Use
 
 ```ts
@@ -85,10 +130,9 @@ page and was never checked on checkout is not a failure. Reporting it as one
 sends a developer to fix code that may be fine; the real answer is that nobody
 looked at that page.
 
-**It will not let a scanner speak for a person.** A pass recorded by a tool
-alone is flagged; a pass recorded by a tool alone *on a criterion no tool can
-settle* — 1.1.1 Non-text Content, say — is called out separately. That is not
-weak evidence, it is absent evidence wearing a green tick.
+**It will not let a scanner speak for a person.** A pass with only a tool behind
+it comes back as `unconfirmed`, and on a criterion no tool can settle it is
+`overclaimed` as well — the two being different sizes of the same problem.
 
 **It will not let evidence age silently.** Every check carries its date and the
 build it was taken on. A page audited before four redesigns supports nothing,
