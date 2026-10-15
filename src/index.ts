@@ -24,6 +24,14 @@ export {
 } from "./evidence.ts";
 
 export {
+  fromScanner,
+  InvalidScannerRun,
+  type ScannerResults,
+  type ScannerRule,
+  type ScannerRun,
+} from "./scanner.ts";
+
+export {
   assess,
   InvalidAssessment,
   type AssessOptions,

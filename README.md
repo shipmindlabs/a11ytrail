@@ -116,6 +116,35 @@ if (published.pending.length > 0) {
 console.log(toMarkdown(published));
 ```
 
+### From a scanner
+
+axe-core and the tools built on it report in four buckets — `passes`,
+`violations`, `incomplete`, `inapplicable` — with every rule tagged by the
+criteria it belongs to. That is enough to place a result, and not enough to
+situate it, so the scope, build, date and tool come from you: the results do not
+know which page or which release they describe.
+
+```ts
+import { fromScanner } from "a11ytrail";
+
+for (const check of fromScanner(axeResults, {
+  scope: "checkout",
+  tool: "axe-core 4.10",
+  checkedAt: "2026-08-05",
+  build: "2026.9.0",
+})) {
+  evidence.add(check);
+}
+```
+
+A rule tagged `wcag143` lands on 1.4.3; one tagged `best-practice`, or naming a
+criterion outside the catalogue, lands nowhere. One check comes out per
+criterion and scope, so rules that share a tag and disagree are resolved: a
+violation outranks a pass, `incomplete` is inconclusive rather than a pass, and
+`inapplicable` records that there was nothing to check. The note is left empty —
+a rule id is not a description of what a person runs into, and the statement
+goes on asking for one.
+
 ## The five things it refuses to do
 
 **It will not treat an unevaluated criterion as a pass.** WCAG's conformance
@@ -151,8 +180,9 @@ Markdown, because a plausible sentence there reads as answered.
 ## What it does not do
 
 **It runs no tests.** axe-core, Playwright and a person with a screen reader do
-that. This consumes what they produce. Building a fifth rule engine would add
-nothing, and the gap in this field is not detection — it is the record.
+that. This consumes what they produce — `fromScanner` takes the scanner output
+as it comes. Building a fifth rule engine would add nothing, and the gap in this
+field is not detection — it is the record.
 
 **It is not legal advice.** It builds the European model accessibility statement
 out of your own evidence. Whether that satisfies a particular national
@@ -166,9 +196,10 @@ Early. What is here works end to end; the rest is listed rather than implied.
 |---|---|
 | Criteria | WCAG 2.2, levels A and AA — 55 success criteria |
 | Evidence | outcome, method, date, who, scope, tool, build; later checks supersede earlier ones per scope |
+| Import | scanner results in the passes/violations/incomplete/inapplicable shape, placed by WCAG tag |
 | Claim | per-criterion status, coverage gaps, staleness by age and by build, the re-check list, scanner-only passes |
 | Statement | European model statement as data and as Markdown, with the human decisions marked instead of filled |
-| Not yet | EN 301 549 clause mapping beyond WCAG, VPAT/ACR export, importing axe-core results directly, non-web software criteria |
+| Not yet | EN 301 549 clause mapping beyond WCAG, VPAT/ACR export, non-web software criteria |
 
 Level AAA is deliberately absent: nobody claims it for a whole product, and
 offering it would invite a claim nobody can keep.
