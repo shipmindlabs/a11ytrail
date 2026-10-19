@@ -133,6 +133,38 @@ test("a later check supersedes an earlier one for the same scope", () => {
   assert.equal(assess(evidence, { asOf }).status, "partially-conformant");
 });
 
+// What asOf is for: re-running the same report has to give the same answer, so
+// a check dated after it cannot decide the claim — it was not known then.
+test("a claim as of a date rests only on the checks dated by then", () => {
+  const evidence = new Evidence(fullPass().checks.filter((c) => c.criterion !== "2.4.7"));
+  evidence.add(check({ criterion: "1.4.3", outcome: "failed", checkedAt: "2026-09-10" }));
+  evidence.add(check({ criterion: "2.4.7", checkedAt: "2026-09-10" }));
+
+  const august = assess(evidence, { asOf });
+
+  assert.equal(
+    august.results.find((r) => r.criterion.id === "1.4.3")!.status,
+    "satisfied",
+    "the scope falls back to the last check dated by then",
+  );
+  assert.deepEqual(
+    august.unevaluated.map((r) => r.criterion.id),
+    ["2.4.7"],
+    "a scope whose only check comes later has nothing to fall back on",
+  );
+  assert.equal(august.status, "incomplete");
+  assert.match(august.reasons.join(" "), /2 checks are dated after 2026-08-16 and were set aside/);
+
+  const september = assess(evidence, { asOf: new Date("2026-09-15T00:00:00Z") });
+
+  assert.equal(september.status, "partially-conformant");
+  assert.deepEqual(
+    september.failed.map((r) => r.criterion.id),
+    ["1.4.3"],
+  );
+  assert.ok(!september.reasons.some((reason) => /set aside/.test(reason)));
+});
+
 test("evidence that has aged out is reported without silently voiding the claim", () => {
   const claim = assess(fullPass("home", "2024-01-01"), { asOf, staleAfterDays: 365 });
   assert.equal(claim.status, "conformant");

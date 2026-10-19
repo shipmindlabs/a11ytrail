@@ -169,7 +169,9 @@ and a pass from two releases ago says nothing about what ships today — so stal
 evidence appears in the claim's caveats and in the published statement, with
 what to re-run named by criterion and scope. Naming the build under assessment
 also decides which check speaks for it: the one taken on that build, not merely
-the most recent one.
+the most recent one. The date the claim is made as of cuts the other way: a
+check dated after it is left out and counted in the caveats, so the same report
+run again later still says what it said then.
 
 **It will not write the parts that are a judgement.** Whether an exemption is a
 disproportionate burden, what alternative a user is offered, what a failing

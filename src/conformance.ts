@@ -9,7 +9,8 @@
  */
 
 import { AUTOMATABLE, criteriaFor, type Criterion, type Level } from "./criteria.ts";
-import type { Check, Evidence } from "./evidence.ts";
+import { Evidence } from "./evidence.ts";
+import type { Check } from "./evidence.ts";
 
 export type CriterionStatus =
   | "satisfied"
@@ -112,7 +113,12 @@ export type AssessOptions = {
    * a pass on the release before last says nothing about what ships today.
    */
   readonly build?: string;
-  /** The date the assessment is made. Injectable so reports are reproducible. */
+  /**
+   * The date the assessment is made. Injectable so reports are reproducible,
+   * which also decides what the claim may rest on: a check dated after this
+   * was not known then and is left out, so the scope falls back to an earlier
+   * check or stays unevaluated.
+   */
   readonly asOf?: Date;
 };
 
@@ -123,13 +129,16 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
   const level = options.level ?? "AA";
   const asOf = options.asOf ?? new Date();
   const staleAfterDays = options.staleAfterDays ?? 365;
-  const scopes = options.scopes ?? evidence.scopes;
   const build = options.build;
 
   validateOptions(build, staleAfterDays, asOf);
 
+  const dated = datedBy(evidence, asOf);
+  const setAside = evidence.checks.length - dated.checks.length;
+  const scopes = options.scopes ?? dated.scopes;
+
   const results = criteriaFor(level).map((criterion) =>
-    assessCriterion(criterion, evidence, scopes, asOf, staleAfterDays, build),
+    assessCriterion(criterion, dated, scopes, asOf, staleAfterDays, build),
   );
 
   const failed = results.filter((r) => r.status === "failed" || r.status === "partial");
@@ -189,6 +198,12 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     );
   }
 
+  if (setAside > 0) {
+    reasons.push(
+      `${setAside} checks are dated after ${isoDate(asOf)} and were set aside, so this claim rests only on what was recorded by then`,
+    );
+  }
+
   const agedOut = countStale(results, "aged-out");
   if (agedOut > 0) {
     reasons.push(`${agedOut} criteria rest on evidence older than ${staleAfterDays} days`);
@@ -243,6 +258,23 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     overclaimed,
     reasons,
   };
+}
+
+/**
+ * The evidence as it stood on the date being assessed.
+ *
+ * A check dated after that date was not known then, so letting it decide the
+ * claim would make the same call answer differently depending on when it runs —
+ * which is the opposite of what asOf is for. The scope it would have spoken for
+ * falls back to its last earlier check, or has none and is unevaluated.
+ */
+function datedBy(evidence: Evidence, asOf: Date): Evidence {
+  const known = evidence.checks.filter((check) => Date.parse(check.checkedAt) <= asOf.getTime());
+  return known.length === evidence.checks.length ? evidence : new Evidence(known);
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
 function validateOptions(build: string | undefined, staleAfterDays: number, asOf: Date): void {
