@@ -81,6 +81,17 @@ export const CRITERIA: readonly Criterion[] = [
   { id: "4.1.3", name: "Status Messages", level: "AA", since: "2.1" },
 ] as const;
 
+/**
+ * Criteria an earlier version of WCAG had and 2.2 does not, by id and name.
+ *
+ * https://www.w3.org/TR/WCAG22/ carries 4.1.1 Parsing as "Obsolete and
+ * removed". It is not part of the catalogue and never will be, but evidence
+ * still arrives for it, and "that criterion does not exist" is the wrong answer
+ * to "we tested 4.1.1": it did exist, and a 2.2 claim simply does not include
+ * it.
+ */
+export const REMOVED_IN_2_2: ReadonlyMap<string, string> = new Map([["4.1.1", "Parsing"]]);
+
 const byId = new Map(CRITERIA.map((criterion) => [criterion.id, criterion]));
 
 export function criterion(id: string): Criterion | undefined {

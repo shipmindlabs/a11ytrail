@@ -7,7 +7,7 @@
  * taken on, so that staleness is visible rather than assumed away.
  */
 
-import { criterion } from "./criteria.ts";
+import { criterion, REMOVED_IN_2_2 } from "./criteria.ts";
 
 export type Method =
   /** A scanner. Fast, repeatable, and blind to meaning. */
@@ -65,6 +65,12 @@ export class InvalidCheck extends Error {}
 
 function validate(check: Check): void {
   if (!criterion(check.criterion)) {
+    const removed = REMOVED_IN_2_2.get(check.criterion);
+    if (removed) {
+      throw new InvalidCheck(
+        `evidence for ${check.criterion} ${removed} cannot support a claim: the criterion is obsolete and was removed in WCAG 2.2, so a WCAG 2.2 claim does not include it`,
+      );
+    }
     throw new InvalidCheck(
       `unknown success criterion "${check.criterion}": evidence for a criterion that does not exist cannot support a claim`,
     );

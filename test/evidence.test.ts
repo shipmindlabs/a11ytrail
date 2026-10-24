@@ -115,6 +115,20 @@ test("a scope with nothing on the build asked about falls back to its last check
 
 test("evidence for a criterion that does not exist is refused", () => {
   assert.throws(() => new Evidence().add(check({ criterion: "9.9.9" })), InvalidCheck);
+  assert.throws(
+    () => new Evidence().add(check({ criterion: "9.9.9" })),
+    /unknown success criterion/,
+  );
+});
+
+// "That criterion does not exist" is the wrong answer to "we tested 4.1.1": it
+// existed, and a WCAG 2.2 claim is simply not made of it.
+test("evidence for a criterion WCAG 2.2 removed is refused as removed, not as unknown", () => {
+  assert.throws(() => new Evidence().add(check({ criterion: "4.1.1" })), InvalidCheck);
+  assert.throws(() => new Evidence().add(check({ criterion: "4.1.1" })), /removed in WCAG 2\.2/);
+
+  assert.throws(() => Evidence.fromJSON([check({ criterion: "4.1.1" })]), InvalidCheck);
+  assert.throws(() => Evidence.fromJSON([check({ criterion: "4.1.1" })]), /removed in WCAG 2\.2/);
 });
 
 test("a check nobody performed, at no date, on nothing, is refused", () => {
