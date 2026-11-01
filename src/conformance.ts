@@ -62,13 +62,15 @@ export type CriterionResult = {
   /**
    * True when every check behind this status came from a scanner. Automated
    * tools settle roughly a quarter to a third of accessibility problems, so
-   * this marks a pass that no person has confirmed.
+   * this marks a criterion no person has confirmed — whether it was recorded
+   * as a pass or as not applicable.
    */
   readonly automatedOnly: boolean;
   /**
-   * True when a scanner alone passed a criterion scanners cannot settle —
-   * whether alt text is meaningful, whether focus order makes sense. This is
-   * not weak evidence, it is absent evidence wearing a green tick.
+   * True when a scanner alone decided a criterion scanners cannot settle —
+   * whether alt text is meaningful, whether focus order makes sense, whether
+   * there is a time limit to adjust. This is not weak evidence, it is absent
+   * evidence wearing a green tick.
    */
   readonly beyondAutomation: boolean;
 };
@@ -93,9 +95,9 @@ export type Claim = {
   readonly stale: readonly CriterionResult[];
   /** Every criterion and scope whose evidence no longer applies: the work list. */
   readonly recheck: readonly Recheck[];
-  /** Satisfied only by scanners, with nobody having confirmed. */
+  /** Settled — passed or marked not applicable — by scanners alone. */
   readonly unconfirmed: readonly CriterionResult[];
-  /** Satisfied by a scanner for a criterion no scanner can settle. */
+  /** Settled by a scanner for a criterion no scanner can settle. */
   readonly overclaimed: readonly CriterionResult[];
   /** Why the claim is what it is, in one sentence per reason. */
   readonly reasons: readonly string[];
@@ -155,8 +157,8 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
       lastBuild: entry.check.build,
     })),
   );
-  const unconfirmed = results.filter((r) => r.automatedOnly && r.status === "satisfied");
-  const overclaimed = results.filter((r) => r.beyondAutomation && r.status === "satisfied");
+  const unconfirmed = results.filter((r) => r.automatedOnly && settled(r.status));
+  const overclaimed = results.filter((r) => r.beyondAutomation && settled(r.status));
   const builds = [
     ...new Set(
       results.flatMap((result) =>
@@ -234,13 +236,13 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
 
   if (unconfirmed.length > 0) {
     reasons.push(
-      `${unconfirmed.length} criteria are satisfied by automated checks alone, which settle only part of WCAG`,
+      `${unconfirmed.length} criteria rest on automated checks alone, which settle only part of WCAG`,
     );
   }
 
   if (overclaimed.length > 0) {
     reasons.push(
-      `${overclaimed.length} criteria are passed by a scanner alone although no scanner can settle them`,
+      `${overclaimed.length} criteria are decided by a scanner alone although no scanner can settle them`,
     );
   }
 
@@ -258,6 +260,17 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     overclaimed,
     reasons,
   };
+}
+
+/**
+ * The statuses that close a criterion and let a claim stand on it.
+ *
+ * Not applicable is one of them, which is why it is checked for the same
+ * things a pass is: "the criterion cannot apply here" is a decision about the
+ * content, and a rule that matched nothing has not made it.
+ */
+function settled(status: CriterionStatus): boolean {
+  return status === "satisfied" || status === "not-applicable";
 }
 
 /**

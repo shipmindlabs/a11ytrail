@@ -27,6 +27,23 @@ function fullPass(scope = "home", checkedAt = "2026-08-01", build?: string): Evi
   return evidence;
 }
 
+/** A manual pass everywhere, except that only a scanner decided 2.2.1. */
+function scannerDecidedTiming(): Evidence {
+  return new Evidence(
+    fullPass().checks.map((c) =>
+      c.criterion === "2.2.1"
+        ? {
+            ...c,
+            outcome: "not-applicable" as const,
+            method: "automated" as const,
+            tool: "axe-core",
+            checkedBy: "ci",
+          }
+        : c,
+    ),
+  );
+}
+
 test("a complete pass is conformant", () => {
   const claim = assess(fullPass(), { asOf });
   assert.equal(claim.status, "conformant");
@@ -324,6 +341,38 @@ test("a scanner-only pass on a criterion no scanner can settle is called out", (
     "1.1.1 cannot be settled by a scanner and must be flagged",
   );
   assert.match(claim.reasons.join(" "), /no scanner can settle them/);
+});
+
+// "Nothing here to check" is a verdict too: no rule matched, which is not the
+// same as there being no time limit anywhere on the page.
+test("a scanner-only not-applicable closes a criterion with nobody confirming it", () => {
+  const claim = assess(scannerDecidedTiming(), { asOf });
+
+  assert.equal(claim.status, "conformant");
+  assert.equal(claim.results.find((r) => r.criterion.id === "2.2.1")!.status, "not-applicable");
+  assert.deepEqual(
+    claim.unconfirmed.map((r) => r.criterion.id),
+    ["2.2.1"],
+  );
+  assert.deepEqual(
+    claim.overclaimed.map((r) => r.criterion.id),
+    ["2.2.1"],
+    "no scanner decides whether there is a time limit to adjust",
+  );
+  assert.match(claim.reasons.join(" "), /no scanner can settle them/);
+});
+
+test("a person agreeing the criterion does not apply clears both flags", () => {
+  const evidence = scannerDecidedTiming().add(
+    check({ criterion: "2.2.1", outcome: "not-applicable", checkedAt: "2026-08-10" }),
+  );
+
+  const claim = assess(evidence, { asOf });
+
+  assert.equal(claim.results.find((r) => r.criterion.id === "2.2.1")!.status, "not-applicable");
+  assert.deepEqual(claim.unconfirmed, []);
+  assert.deepEqual(claim.overclaimed, []);
+  assert.ok(!claim.reasons.some((reason) => /scanner/.test(reason)));
 });
 
 test("no evidence at all is incomplete, and says so plainly", () => {

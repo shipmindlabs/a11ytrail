@@ -60,9 +60,9 @@ Focus Order, 3.3.3 Error Suggestion.
 
 So a tool having run is treated here as a fact about the check, not as an answer
 to the criterion. Seven of the fifty-five criteria at A and AA are listed in
-`AUTOMATABLE` as ones a scanner can settle on its own. A pass on anything else
-with nothing but a scanner behind it is absent evidence wearing a green tick,
-and it is reported as such.
+`AUTOMATABLE` as ones a scanner can settle on its own. Anything else closed by a
+scanner alone — a pass, or a *not applicable* recorded because no rule matched —
+is absent evidence wearing a green tick, and it is reported as such.
 
 ### What it keeps instead
 
@@ -77,8 +77,8 @@ From that, a claim can say what a percentage cannot:
 ```ts
 const claim = assess(evidence, { level: "AA", build: "2026.9.0" });
 
-claim.unconfirmed; // satisfied, but every check behind it came from a scanner
-claim.overclaimed; // satisfied by a scanner alone on a criterion no scanner settles
+claim.unconfirmed; // closed — passed or not applicable — with only a scanner behind it
+claim.overclaimed; // closed by a scanner alone on a criterion no scanner settles
 claim.unevaluated; // nobody has looked, or nobody has looked everywhere
 claim.recheck;     // evidence that describes another build, by criterion and scope
 ```
@@ -159,9 +159,12 @@ page and was never checked on checkout is not a failure. Reporting it as one
 sends a developer to fix code that may be fine; the real answer is that nobody
 looked at that page.
 
-**It will not let a scanner speak for a person.** A pass with only a tool behind
-it comes back as `unconfirmed`, and on a criterion no tool can settle it is
-`overclaimed` as well — the two being different sizes of the same problem.
+**It will not let a scanner speak for a person.** A criterion closed with only a
+tool behind it comes back as `unconfirmed`, and on a criterion no tool can settle
+it is `overclaimed` as well — the two being different sizes of the same problem.
+That applies to `not-applicable` exactly as it does to a pass: a rule that found
+nothing to look at has still decided the criterion, and "no match" is not a
+person confirming there is nothing there.
 
 **It will not let evidence age silently.** Every check carries its date and the
 build it was taken on. A page audited before four redesigns supports nothing,
@@ -199,7 +202,7 @@ Early. What is here works end to end; the rest is listed rather than implied.
 | Criteria | WCAG 2.2, levels A and AA — 55 success criteria |
 | Evidence | outcome, method, date, who, scope, tool, build; later checks supersede earlier ones per scope |
 | Import | scanner results in the passes/violations/incomplete/inapplicable shape, placed by WCAG tag |
-| Claim | per-criterion status, coverage gaps, staleness by age and by build, the re-check list, scanner-only passes |
+| Claim | per-criterion status, coverage gaps, staleness by age and by build, the re-check list, criteria closed by a scanner alone |
 | Statement | European model statement as data and as Markdown, with the human decisions marked instead of filled |
 | Not yet | EN 301 549 clause mapping beyond WCAG, VPAT/ACR export, non-web software criteria |
 
