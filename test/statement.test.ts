@@ -4,9 +4,18 @@ import assert from "node:assert/strict";
 import { criteriaFor } from "../src/criteria.ts";
 import { assess } from "../src/conformance.ts";
 import { Evidence, type Check } from "../src/evidence.ts";
-import { statement, toMarkdown, UnsupportedClaim, type Organisation } from "../src/statement.ts";
+import {
+  statement,
+  toMarkdown,
+  UnsupportedClaim,
+  type Organisation,
+  type Pending,
+} from "../src/statement.ts";
 
 const asOf = new Date("2026-08-16T00:00:00Z");
+
+/** What the renderer puts where a decision is missing. */
+const MARKER = "**[needs a human decision]**";
 
 /** An organisation that has not yet answered the questions only it can answer. */
 const organisation: Organisation = {
@@ -23,6 +32,14 @@ const decided: Organisation = {
   lastReviewedOn: "2026-08-16",
   disproportionateBurden: [],
   outOfScope: [],
+};
+
+/** The same organisation before anybody sat down with the statement. */
+const nothingAnswered: Organisation = {
+  name: organisation.name,
+  service: organisation.service,
+  feedbackContact: organisation.feedbackContact,
+  enforcementProcedure: organisation.enforcementProcedure,
 };
 
 function evidenceWith(
@@ -44,6 +61,16 @@ function evidenceWith(
     });
   }
   return evidence;
+}
+
+function markerCount(markdown: string): number {
+  return markdown.split(MARKER).length - 1;
+}
+
+function linesMarking(markdown: string, decision: Pending): readonly string[] {
+  return markdown
+    .split("\n")
+    .filter((line) => line.includes(MARKER) && line.includes(decision.question));
 }
 
 test("a full pass produces a fully compliant statement", () => {
@@ -124,6 +151,91 @@ test("exemptions are asked for when absent and taken at face value when declared
   assert.ok(markdown.includes("### Disproportionate burden"));
   assert.ok(markdown.includes("the archived 2019 annual report PDFs"));
   assert.ok(!markdown.includes("### Content outside the scope of the legislation"));
+});
+
+// Every kind of open decision at once, because the failure mode is a marker
+// rendered twice or not at all: a reader works through the marks, and a count
+// in the banner that does not match them is worse than no count.
+test("every kind of open decision is marked exactly once, and the banner counts them", () => {
+  const s = statement(assess(evidenceWith({}, ["2.1.1"]), { asOf }), nothingAnswered, asOf);
+
+  assert.deepEqual(
+    s.pending.map((item) => item.id),
+    [
+      "reason:2.1.1",
+      "alternative:2.1.1",
+      "disproportionate-burden",
+      "out-of-scope",
+      "assessment-method",
+      "last-review",
+    ],
+  );
+
+  const markdown = toMarkdown(s);
+
+  for (const decision of s.pending) {
+    const marked = linesMarking(markdown, decision);
+    assert.equal(marked.length, 1, `${decision.id} is marked ${marked.length} times, not once`);
+    assert.ok(
+      marked[0].includes(decision.because),
+      `${decision.id} is marked without saying why the record cannot answer it`,
+    );
+  }
+
+  assert.ok(markdown.includes("Draft: 6 part(s) of this statement need a human decision"));
+  // The banner names the marker once itself, to say what to look for below.
+  assert.equal(markerCount(markdown), s.pending.length + 1);
+});
+
+test("a statement with every answer given carries no marker, no banner, no empty heading", () => {
+  const claim = assess(evidenceWith({}, ["2.1.1"], { "2.1.1": "the date picker is mouse-only" }), {
+    asOf,
+  });
+  const s = statement(
+    claim,
+    { ...decided, alternatives: { "2.1.1": "the date can be typed into the field next to it" } },
+    asOf,
+  );
+
+  assert.deepEqual(s.pending, []);
+
+  const markdown = toMarkdown(s);
+
+  assert.equal(markerCount(markdown), 0);
+  assert.ok(!markdown.includes("Draft:"));
+  // An empty list says the question was considered and nothing is claimed,
+  // which needs no heading of its own.
+  assert.ok(!markdown.includes("### Disproportionate burden"));
+  assert.ok(!markdown.includes("### Content outside the scope of the legislation"));
+  assert.ok(
+    markdown.includes("### Non-compliance with the accessibility requirements"),
+    "the declared failure is still there",
+  );
+  assert.ok(markdown.includes("the date picker is mouse-only"));
+});
+
+// Blank is not an answer, so the decision stays open — but what the
+// organisation handed over is printed as given rather than quietly replaced,
+// so the published line shows the blank it supplied.
+test("a method that is only whitespace stays pending, and is printed as it was given", () => {
+  const blank = "   ";
+  const s = statement(
+    assess(evidenceWith(), { asOf }),
+    { ...decided, assessmentMethod: blank },
+    asOf,
+  );
+
+  assert.deepEqual(
+    s.pending.map((item) => item.id),
+    ["assessment-method"],
+  );
+
+  const markdown = toMarkdown(s);
+
+  assert.ok(markdown.includes(`Assessment method: ${blank}.`));
+  assert.deepEqual(linesMarking(markdown, s.pending[0]), []);
+  assert.ok(markdown.includes("Draft: 1 part(s) of this statement need a human decision"));
+  assert.equal(markerCount(markdown), 1, "the banner, and nothing marked in the body");
 });
 
 // The refusal that matters. There is no honest way to render "we have not
