@@ -81,6 +81,7 @@ claim.unconfirmed; // closed — passed or not applicable — with only a scanne
 claim.overclaimed; // closed by a scanner alone on a criterion no scanner settles
 claim.unevaluated; // nobody has looked, or nobody has looked everywhere
 claim.recheck;     // evidence that describes another build, by criterion and scope
+claim.scopes;      // what was examined, which the published statement declares
 ```
 
 None of these turn a pass into a failure. They change what the claim is allowed
@@ -157,7 +158,9 @@ publishing "partially compliant".
 **It will not confuse a gap with a defect.** A criterion that passes on the home
 page and was never checked on checkout is not a failure. Reporting it as one
 sends a developer to fix code that may be fine; the real answer is that nobody
-looked at that page.
+looked at that page. The pages that were looked at are declared in the
+statement, next to the status, because a status published without them reads as
+a claim about the whole service.
 
 **It will not let a scanner speak for a person.** A criterion closed with only a
 tool behind it comes back as `unconfirmed`, and on a criterion no tool can settle
@@ -203,7 +206,7 @@ Early. What is here works end to end; the rest is listed rather than implied.
 | Evidence | outcome, method, date, who, scope, tool, build; later checks supersede earlier ones per scope |
 | Import | scanner results in the passes/violations/incomplete/inapplicable shape, placed by WCAG tag |
 | Claim | per-criterion status, coverage gaps, staleness by age and by build, the re-check list, criteria closed by a scanner alone |
-| Statement | European model statement as data and as Markdown, with the human decisions marked instead of filled |
+| Statement | European model statement as data and as Markdown, with the parts examined declared and the human decisions marked instead of filled |
 | Not yet | EN 301 549 clause mapping beyond WCAG, VPAT/ACR export, non-web software criteria |
 
 Level AAA is deliberately absent: nobody claims it for a whole product, and

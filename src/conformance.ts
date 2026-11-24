@@ -89,6 +89,11 @@ export type Claim = {
   readonly build?: string;
   /** The builds the evidence under this claim was actually taken on. */
   readonly builds: readonly string[];
+  /**
+   * The scopes the claim covers: the pages, views and components that were
+   * examined, which is not everything the service is made of.
+   */
+  readonly scopes: readonly string[];
   readonly results: readonly CriterionResult[];
   readonly failed: readonly CriterionResult[];
   readonly unevaluated: readonly CriterionResult[];
@@ -251,6 +256,7 @@ export function assess(evidence: Evidence, options: AssessOptions = {}): Claim {
     status,
     build,
     builds,
+    scopes,
     results,
     failed,
     unevaluated,

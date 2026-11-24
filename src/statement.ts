@@ -77,6 +77,12 @@ export type Statement = {
   readonly organisation: Organisation;
   readonly status: ComplianceStatus;
   readonly level: string;
+  /**
+   * The parts of the service the assessment examined. The status is about
+   * these, and a statement that names none of them is read as covering
+   * everything.
+   */
+  readonly coverage: readonly string[];
   readonly preparedOn: string;
   /** Criteria that are not met, with what the evidence says about each. */
   readonly nonAccessibleContent: readonly NonAccessibleItem[];
@@ -105,6 +111,7 @@ export function statement(claim: Claim, organisation: Organisation, preparedOn: 
     organisation,
     status: complianceStatus(claim.status),
     level: `WCAG 2.2 level ${claim.level}`,
+    coverage: claim.scopes,
     preparedOn: preparedOn.toISOString().slice(0, 10),
     nonAccessibleContent,
     caveats: claim.reasons,
@@ -246,6 +253,7 @@ export function toMarkdown(s: Statement): string {
     `## Compliance status`,
     ``,
     `${s.organisation.service} is **${s.status}** with ${s.level}.`,
+    `This status is based on an examination of: ${s.coverage.join(", ")}.`,
     ``,
   );
 

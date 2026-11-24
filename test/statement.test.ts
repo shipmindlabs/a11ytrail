@@ -285,3 +285,30 @@ test("a statement with nothing to declare omits the empty sections", () => {
   assert.ok(!markdown.includes("Draft:"));
   assert.ok(markdown.includes("**fully compliant**"));
 });
+
+// A status is about the pages somebody opened. Published without them, it reads
+// as a claim about the whole service, which is the overclaim the evidence was
+// collected to prevent.
+test("the statement declares the parts of the service that were examined", () => {
+  const evidence = new Evidence([
+    ...evidenceWith().checks,
+    ...evidenceWith({ scope: "checkout" }).checks,
+  ]);
+
+  const s = statement(assess(evidence, { asOf }), decided, asOf);
+
+  assert.deepEqual(s.coverage, ["checkout", "home"]);
+  assert.ok(toMarkdown(s).includes("This status is based on an examination of: checkout, home."));
+});
+
+test("a claim narrowed to one page declares that page and not the other", () => {
+  const evidence = new Evidence([
+    ...evidenceWith().checks,
+    ...evidenceWith({ scope: "checkout" }).checks,
+  ]);
+
+  const s = statement(assess(evidence, { asOf, scopes: ["home"] }), decided, asOf);
+
+  assert.deepEqual(s.coverage, ["home"]);
+  assert.ok(toMarkdown(s).includes("an examination of: home."));
+});
